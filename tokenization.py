@@ -55,14 +55,12 @@ def process_csv(file_path, result_folder):
         
     print(f"Processed {processed_rows} rows.")
 
-# Process all CSV files in the specified directory
-directory_path = "test-data"
-result_folder = "tokens"
+# Get user input for input and output directories
+input_directory = input("Enter the input directory path: ")
+output_directory = input("Enter the output directory path: ")
 
-# Create result folder if it doesn't exist
-os.makedirs(result_folder, exist_ok=True)
-
-for filename in os.listdir(directory_path):
+# Process all CSV files in the specified input directory
+for filename in os.listdir(input_directory):
     if filename.endswith(".csv"):
         file_path = os.path.join(input_directory, filename)
         process_csv(file_path, output_directory)
