@@ -1,6 +1,5 @@
 import os
 import pandas as pd
-import tldextract
 from publicsuffix2 import PublicSuffixList
 
 # Initialize Public Suffix List
@@ -18,9 +17,9 @@ def process_csv(file_path, result_folder):
     for index, row in df.iterrows():
         dns_name = str(row.iloc[0])  # Access the first (and only) column directly
 
-        # Extract TLD using tldextract library
-        extracted_info = tldextract.extract(dns_name)
-        tld = extracted_info.suffix
+        # Extract TLD using manual method
+        dot_index = dns_name.rfind('.')
+        tld = dns_name[dot_index + 1:]
 
         # Check if TLD is in Public Suffix List
         if psl.get_public_suffix(tld) == tld:
@@ -33,7 +32,7 @@ def process_csv(file_path, result_folder):
             tld_dataframes[tld_key] = pd.DataFrame(columns=['dns-name'])
 
         # Remove TLD from the domain
-        domain_without_tld = f"{extracted_info.subdomain}.{extracted_info.domain}"
+        domain_without_tld = dns_name[:dot_index] if dot_index != -1 else dns_name
         tld_dataframes[tld_key] = pd.concat([tld_dataframes[tld_key], pd.DataFrame({'dns-name': [domain_without_tld]})], ignore_index=True)
         
         # Increment the processed rows counter
@@ -46,6 +45,7 @@ def process_csv(file_path, result_folder):
                 mode = 'a' if os.path.exists(output_file_path) else 'w'  # Use 'w' if file doesn't exist, 'a' if it does
                 tld_df.to_csv(output_file_path, mode=mode, header=False, index=False)
                 tld_dataframes[tld_key] = pd.DataFrame(columns=['dns-name'])  # Reset DataFrame after appending
+                print(f"I am running all fine ;)")
 
     # Append any remaining results
     for tld_key, tld_df in tld_dataframes.items():
