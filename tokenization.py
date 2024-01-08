@@ -56,8 +56,8 @@ def process_csv(file_path, result_folder):
     print(f"Processed {processed_rows} rows.")
 
 # Process all CSV files in the specified directory
-directory_path = "test-data"
-result_folder = "tokens"
+directory_path = "final"
+result_folder = "psl-tokens"
 
 # Create result folder if it doesn't exist
 os.makedirs(result_folder, exist_ok=True)
