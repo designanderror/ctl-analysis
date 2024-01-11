@@ -16,6 +16,8 @@ def process_csv(file_path, result_folder):
     
     for index, row in df.iterrows():
         dns_name = str(row.iloc[0])  # Access the first (and only) column directly
+        first_seen = row.iloc[1]  # Access the second column for "first seen"
+        last_seen = row.iloc[2]   # Access the third column for "last seen"
 
         # Extract TLD using manual method
         dot_index = dns_name.rfind('.')
@@ -27,13 +29,13 @@ def process_csv(file_path, result_folder):
         else:
             tld_key = "others"
 
-        # Add the DNS name to the corresponding DataFrame
+        # Add the DNS name, first seen, and last seen to the corresponding DataFrame
         if tld_key not in tld_dataframes:
-            tld_dataframes[tld_key] = pd.DataFrame(columns=['dns-name'])
+            tld_dataframes[tld_key] = pd.DataFrame(columns=['dns-name', 'first-seen', 'last-seen'])
 
         # Remove TLD from the domain
         domain_without_tld = dns_name[:dot_index] if dot_index != -1 else dns_name
-        tld_dataframes[tld_key] = pd.concat([tld_dataframes[tld_key], pd.DataFrame({'dns-name': [domain_without_tld]})], ignore_index=True)
+        tld_dataframes[tld_key] = pd.concat([tld_dataframes[tld_key], pd.DataFrame({'dns-name': [domain_without_tld], 'first-seen': [first_seen], 'last-seen': [last_seen]})], ignore_index=True)
         
         # Increment the processed rows counter
         processed_rows += 1
@@ -44,7 +46,7 @@ def process_csv(file_path, result_folder):
                 output_file_path = os.path.join(result_folder, f"{tld_key}.csv")
                 mode = 'a' if os.path.exists(output_file_path) else 'w'  # Use 'w' if file doesn't exist, 'a' if it does
                 tld_df.to_csv(output_file_path, mode=mode, header=False, index=False)
-                tld_dataframes[tld_key] = pd.DataFrame(columns=['dns-name'])  # Reset DataFrame after appending
+                tld_dataframes[tld_key] = pd.DataFrame(columns=['dns-name', 'first-seen', 'last-seen'])  # Reset DataFrame after appending
                 print(f"I am running all fine ;)")
 
     # Append any remaining results
