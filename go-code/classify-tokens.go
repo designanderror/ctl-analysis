@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/csv"
 	"fmt"
 	"os"
@@ -12,9 +13,9 @@ import (
 )
 
 func main() {
-	// Input and output directories
-	inputDir := "test-data"
-	outputDir := "tokens"
+	// Take input and output directories from the user
+	inputDir := getUserInput("Enter the input directory: ")
+	outputDir := getUserInput("Enter the output directory: ")
 
 	// Process files in batches of 10
 	batchSize := 10
@@ -40,6 +41,13 @@ func main() {
 
 	wg.Wait()
 	fmt.Println("Processing complete.")
+}
+
+func getUserInput(prompt string) string {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print(prompt)
+	input, _ := reader.ReadString('\n')
+	return strings.TrimSpace(input)
 }
 
 func processFile(filePath, outputDir string, batchSize int) {
