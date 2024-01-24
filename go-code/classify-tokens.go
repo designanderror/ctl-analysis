@@ -7,14 +7,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 
 	"golang.org/x/net/publicsuffix"
 )
 
+const batchSize = 100000
+
 // Process a CSV file
-func processCSV(filePath, resultFolder string) {
+func processCSV(filePath, resultFolder string, wg *sync.WaitGroup, ch chan<- map[string][]string) {
+	defer wg.Done()
+
 	file, err := os.Open(filePath)
 	if err != nil {
 		fmt.Println("Error opening file:", err)
@@ -36,53 +42,51 @@ func processCSV(filePath, resultFolder string) {
 			return
 		}
 
-		dnsName := row[0]
-		firstSeen := row[1]
-		lastSeen := row[2]
+		dnsName := strings.TrimSpace(row[0])
+		firstSeen, err := strconv.Atoi(strings.TrimSpace(row[1]))
+		if err != nil {
+			fmt.Printf("Error converting firstSeen to integer: %v\n", err)
+			continue
+		}
+		lastSeen, err := strconv.Atoi(strings.TrimSpace(row[2]))
+		if err != nil {
+			fmt.Printf("Error converting lastSeen to integer: %v\n", err)
+			continue
+		}
 
 		// Extract TLD
 		dotIndex := strings.LastIndex(dnsName, ".")
 		if dotIndex == -1 {
 			continue // Invalid DNS name, skip
 		}
-		tld := dnsName[dotIndex+1:]
+		tld := strings.TrimSpace(dnsName[dotIndex+1:])
 
 		// Check if TLD is in Public Suffix List
-		pslTLD, _ := publicsuffix.PublicSuffix(tld)
+		pslTLD, pslValid := publicsuffix.PublicSuffix(tld)
 		var tldKey string
-		if tld == pslTLD {
+		if pslValid && tld == pslTLD {
 			tldKey = fmt.Sprintf("dot_%s", tld)
+			df[tldKey] = append(df[tldKey], fmt.Sprintf("%s,%d,%d", dnsName, firstSeen, lastSeen))
 		} else {
 			tldKey = "others"
+			df[tldKey] = append(df[tldKey], fmt.Sprintf("%s,%d,%d", dnsName, firstSeen, lastSeen))
 		}
 
-		// Add the DNS name, first seen, and last seen to the corresponding slice
-		df[tldKey] = append(df[tldKey], fmt.Sprintf("%s,%s,%s", dnsName, firstSeen, lastSeen))
-
-		// Increment the processed rows counter
 		processedRows++
 
-		// Append results after every 10 rows
-		if processedRows%10 == 0 {
-			for key, values := range df {
-				outputFilePath := filepath.Join(resultFolder, fmt.Sprintf("%s.csv", key))
-				appendToFile(outputFilePath, values)
-				df[key] = nil // Reset slice after appending
-			}
+		// Write in batches to reduce I/O operations
+		if processedRows%batchSize == 0 {
+			ch <- df
+			df = make(map[string][]string)
 		}
 	}
 
-	// Append any remaining results
-	for key, values := range df {
-		outputFilePath := filepath.Join(resultFolder, fmt.Sprintf("%s.csv", key))
-		appendToFile(outputFilePath, values)
-	}
-
-	fmt.Printf("Processed %d rows.\n", processedRows)
+	// Send the remaining result to the channel
+	ch <- df
 }
 
 // Append data to a file
-func appendToFile(filePath string, data []string) {
+func appendToFile(filePath string, data map[string][]string) {
 	// Ensure the directory structure exists
 	dir := filepath.Dir(filePath)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -102,12 +106,17 @@ func appendToFile(filePath string, data []string) {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	for _, row := range data {
-		writer.Write(strings.Split(row, ","))
+	for _, values := range data {
+		for _, row := range values {
+			writer.Write(strings.Split(row, ","))
+		}
 	}
 }
 
 func main() {
+	// Set the maximum number of CPUs that can be executing simultaneously
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	// Take input and output directories from the user
 	inputDir := getUserInput("Enter the input directory: ")
 	outputDir := getUserInput("Enter the output directory: ")
@@ -120,18 +129,36 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
+	ch := make(chan map[string][]string, len(filePaths))
 
+	// Start goroutines to process each file concurrently
 	for _, filePath := range filePaths {
 		wg.Add(1)
-		go func(filePath string) {
-			defer wg.Done()
-
-			// Process each input file
-			processCSV(filePath, outputDir)
-		}(filePath)
+		go processCSV(filePath, outputDir, &wg, ch)
 	}
 
-	wg.Wait()
+	// Start a goroutine to close the channel when all processing is complete
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	// Collect results from goroutines
+	finalResult := make(map[string][]string)
+	for result := range ch {
+		for key, values := range result {
+			finalResult[key] = append(finalResult[key], values...)
+		}
+		// Print a message after processing each batch
+		fmt.Println("Processed a batch. Everything is running fine!")
+	}
+
+	// Write the final result to files
+	for key, values := range finalResult {
+		outputFilePath := filepath.Join(outputDir, fmt.Sprintf("%s.csv", key))
+		appendToFile(outputFilePath, map[string][]string{key: values})
+	}
+
 	fmt.Println("Processing complete.")
 }
 
