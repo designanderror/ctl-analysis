@@ -149,8 +149,6 @@ func main() {
 		for key, values := range result {
 			finalResult[key] = append(finalResult[key], values...)
 		}
-		// Print a message after processing each batch
-		fmt.Println("Processed a batch. Everything is running fine!")
 	}
 
 	// Write the final result to files
